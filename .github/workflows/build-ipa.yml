@@ -1,0 +1,105 @@
+name: Build VisionClaw IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      openclaw_host:
+        description: 'OpenClaw host (e.g., http://192.168.3.10)'
+        required: false
+        default: ''
+      openclaw_port:
+        description: 'OpenClaw port'
+        required: false
+        default: '18789'
+
+env:
+  SCHEME: CameraAccess
+  PROJECT_DIR: samples/CameraAccess
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 16
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Create Secrets.swift
+        working-directory: ${{ env.PROJECT_DIR }}/CameraAccess
+        run: |
+          cat > Secrets.swift << 'EOF'
+          import Foundation
+
+          enum Secrets {
+            static let geminiAPIKey = "${{ secrets.GEMINI_API_KEY }}"
+            static let openClawHost = "${{ github.event.inputs.openclaw_host }}"
+            static let openClawPort = ${{ github.event.inputs.openclaw_port || '18789' }}
+            static let openClawHookToken = "${{ secrets.OPENCLAW_HOOK_TOKEN }}"
+            static let openClawGatewayToken = "${{ secrets.OPENCLAW_GATEWAY_TOKEN }}"
+            static let webrtcSignalingURL = "${{ secrets.WEBRTC_SIGNALING_URL }}"
+          }
+          EOF
+          echo "✅ Secrets.swift created"
+
+      - name: Resolve Swift Package dependencies
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project CameraAccess.xcodeproj \
+            -scheme ${{ env.SCHEME }}
+
+      - name: Build for iOS device (unsigned)
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          xcodebuild build \
+            -project CameraAccess.xcodeproj \
+            -scheme ${{ env.SCHEME }} \
+            -destination 'generic/platform=iOS' \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            | tee build.log | tail -20
+
+      - name: Package IPA
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          # Find the .app
+          APP_PATH=$(find build/Build/Products/Release-iphoneos -name "*.app" -type d | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "❌ No .app found!"
+            find build -name "*.app" -type d
+            exit 1
+          fi
+          echo "Found app: $APP_PATH"
+
+          # Create IPA structure
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -r VisionClaw.ipa Payload/
+          rm -rf Payload/
+
+          echo "✅ IPA created: $(ls -lh VisionClaw.ipa | awk '{print $5}')"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VisionClaw-IPA
+          path: ${{ env.PROJECT_DIR }}/VisionClaw.ipa
+          retention-days: 14
+
+      - name: Upload build log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: ${{ env.PROJECT_DIR }}/build.log
