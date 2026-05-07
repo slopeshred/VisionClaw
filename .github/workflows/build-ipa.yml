@@ -18,27 +18,19 @@ env:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-14
     timeout-minutes: 30
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Select Xcode 16
-        run: |
-          # List available Xcode versions and pick 16.x
-          ls /Applications/ | grep Xcode
-          sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+      - name: Select Xcode 16.2
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
 
-      - name: Show Xcode version
-        run: xcodebuild -version
-
-      - name: Download iOS platform support
+      - name: Show available SDKs
         run: |
-          # Xcode 16+ requires downloading platform support separately
-          xcodebuild -downloadPlatform iOS
-          # List available SDKs to confirm
+          xcodebuild -version
           xcodebuild -showsdks | grep -i ios
 
       - name: Create Secrets.swift
