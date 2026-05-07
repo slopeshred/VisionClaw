@@ -43,21 +43,15 @@ jobs:
 
       - name: Create Secrets.swift
         working-directory: ${{ env.PROJECT_DIR }}/CameraAccess
+        env:
+          GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OC_HOST: ${{ github.event.inputs.openclaw_host }}
+          OC_HOOK: ${{ secrets.OPENCLAW_HOOK_TOKEN }}
+          OC_GATEWAY: ${{ secrets.OPENCLAW_GATEWAY_TOKEN }}
+          WEBRTC_URL: ${{ secrets.WEBRTC_SIGNALING_URL }}
         run: |
-          cat > Secrets.swift << EOF
-          import Foundation
-
-          enum Secrets {
-            static let geminiAPIKey = "${{ secrets.GEMINI_API_KEY }}"
-            static let openClawHost = "${{ github.event.inputs.openclaw_host }}"
-            static let openClawPort = 18789
-            static let openClawHookToken = "${{ secrets.OPENCLAW_HOOK_TOKEN }}"
-            static let openClawGatewayToken = "${{ secrets.OPENCLAW_GATEWAY_TOKEN }}"
-            static let webrtcSignalingURL = "${{ secrets.WEBRTC_SIGNALING_URL }}"
-          }
-          EOF
-          # Remove leading whitespace from heredoc
-          sed -i 's/^          //' Secrets.swift
+          printf 'import Foundation\n\nenum Secrets {\n  static let geminiAPIKey = "%s"\n  static let openClawHost = "%s"\n  static let openClawPort = 18789\n  static let openClawHookToken = "%s"\n  static let openClawGatewayToken = "%s"\n  static let webrtcSignalingURL = "%s"\n}\n' \
+            "$GEMINI_KEY" "$OC_HOST" "$OC_HOOK" "$OC_GATEWAY" "$WEBRTC_URL" > Secrets.swift
           echo "✅ Secrets.swift created"
           cat Secrets.swift
 
